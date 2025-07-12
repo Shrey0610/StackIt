@@ -8,6 +8,13 @@ StackIt is a minimal question-and-answer platform that supports collaborative
 learning and structured knowledge sharing. It’s designed to be simple, user-friendly,
 and focused on the core experience of asking and answering questions within a community.
 
+## Progress:
+![StackIt Screenshot](/Users/shreyshah/Documents/StackIt/SS/Screenshot%202025-07-12%20at%2012.51.22.png)
+
+![StackIt Screenshot](/Users/shreyshah/Documents/StackIt/SS/Screenshot 2025-07-12 at 12.51.27.png)
+
+![StackIt Screenshot](/Users/shreyshah/Documents/StackIt/SS/Screenshot 2025-07-12 at 12.51.31.png)
+
 ## Tech Stack:
 | Layer         | Tech                                                            | Reason                                               |
 | ------------- | --------------------------------------------------------------- | ---------------------------------------------------- |

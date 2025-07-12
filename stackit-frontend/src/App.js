@@ -26,15 +26,19 @@ import {
   Divider,
   Collapse,
   Breadcrumbs,
-  Link
+  Link,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Search,
   Notifications,
   Add,
   KeyboardArrowDown,
-  ThumbUp,
-  ThumbDown,
+  ArrowUpward,
+  ArrowDownward,
   Comment,
   Bookmark,
   Person,
@@ -155,6 +159,12 @@ function App() {
   const [currentView, setCurrentView] = useState('questions'); // 'questions' or 'question-detail'
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [newAnswer, setNewAnswer] = useState('');
+  const [askQuestionOpen, setAskQuestionOpen] = useState(false);
+  const [questionForm, setQuestionForm] = useState({
+    title: '',
+    description: '',
+    tags: ''
+  });
 
   const handleNotificationClick = (event) => {
     setNotificationAnchor(event.currentTarget);
@@ -177,6 +187,29 @@ function App() {
   const handleAnswerVote = (questionId, answerId, type) => {
     // Handle answer voting logic here
     console.log(`Voted ${type} on answer ${answerId} for question ${questionId}`);
+  };
+
+  const handleAskQuestionOpen = () => {
+    setAskQuestionOpen(true);
+  };
+
+  const handleAskQuestionClose = () => {
+    setAskQuestionOpen(false);
+    setQuestionForm({ title: '', description: '', tags: '' });
+  };
+
+  const handleQuestionFormChange = (field, value) => {
+    setQuestionForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSubmitQuestion = () => {
+    // For now, just log the form data
+    console.log('Submitting question:', questionForm);
+    // Close the modal
+    handleAskQuestionClose();
   };
 
   const QuestionDetailPage = ({ question }) => (
@@ -236,13 +269,13 @@ function App() {
                 {/* Question Voting */}
                 <Box display="flex" flexDirection="column" alignItems="center" minWidth={60}>
                   <IconButton size="small">
-                    <ThumbUp fontSize="small" />
+                    <ArrowUpward fontSize="small" sx={{ fontWeight: 'bold' }} />
                   </IconButton>
                   <Typography variant="h6" fontWeight="bold">
                     {question.votes}
                   </Typography>
                   <IconButton size="small">
-                    <ThumbDown fontSize="small" />
+                    <ArrowDownward fontSize="small" sx={{ fontWeight: 'bold' }} />
                   </IconButton>
                   <IconButton size="small" sx={{ mt: 2 }}>
                     <Bookmark fontSize="small" />
@@ -307,7 +340,7 @@ function App() {
                       size="small"
                       onClick={() => handleAnswerVote(question.id, answer.id, 'up')}
                     >
-                      <ThumbUp fontSize="small" />
+                      <ArrowUpward fontSize="small" sx={{ fontWeight: 'bold' }} />
                     </IconButton>
                     <Typography variant="h6" fontWeight="bold">
                       {answer.votes}
@@ -316,7 +349,7 @@ function App() {
                       size="small"
                       onClick={() => handleAnswerVote(question.id, answer.id, 'down')}
                     >
-                      <ThumbDown fontSize="small" />
+                      <ArrowDownward fontSize="small" sx={{ fontWeight: 'bold' }} />
                     </IconButton>
                     {answer.isAccepted && (
                       <Chip
@@ -574,12 +607,13 @@ function App() {
       <AppBar position="static" sx={{ bgcolor: '#232629', boxShadow: 'none', borderBottom: '1px solid #3c4146' }}>
         <Toolbar sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
           <Typography
-            variant={{ xs: 'h6', sm: 'h5' }}
+            variant={{ xs: 'h5', sm: 'h4' }}
             component="div"
             sx={{
               fontWeight: 'bold',
               color: '#ec4899',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: { xs: '1.75rem', sm: '2.125rem' }
             }}
             onClick={handleBackToQuestions}
           >
@@ -702,6 +736,7 @@ function App() {
                     textTransform: 'none',
                     fontWeight: 500
                   }}
+                  onClick={handleAskQuestionOpen}
                 >
                   Ask New Question
                 </Button>
@@ -821,6 +856,141 @@ function App() {
         /* Question Detail Page */
         <QuestionDetailPage question={selectedQuestion} />
       )}
+
+      {/* Ask Question Dialog */}
+      <Dialog
+        open={askQuestionOpen}
+        onClose={handleAskQuestionClose}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            borderRadius: 3,
+            maxHeight: '90vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h5" fontWeight="medium">
+            Ask Question
+          </Typography>
+        </DialogTitle>
+
+        <DialogContent sx={{ pt: 3 }}>
+          <Stack spacing={3}>
+            {/* Title */}
+            <Box>
+              <Typography variant="body1" fontWeight="medium" sx={{ mb: 1 }}>
+                Title
+              </Typography>
+              <TextField
+                variant="outlined"
+                fullWidth
+                value={questionForm.title}
+                onChange={(e) => handleQuestionFormChange('title', e.target.value)}
+                placeholder="Enter a descriptive title for your question"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+            </Box>
+
+            {/* Description with Rich Text Editor */}
+            <Box>
+              <Typography variant="body1" fontWeight="medium" sx={{ mb: 1 }}>
+                Description
+              </Typography>
+
+              {/* Rich Text Editor Toolbar */}
+              <Box
+                sx={{
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '8px 8px 0 0',
+                  p: 1.5,
+                  bgcolor: '#f5f5f5',
+                  display: 'flex',
+                  gap: 1,
+                  flexWrap: 'wrap'
+                }}
+              >
+                <IconButton size="small"><FormatBold /></IconButton>
+                <IconButton size="small"><FormatItalic /></IconButton>
+                <Divider orientation="vertical" flexItem />
+                <IconButton size="small"><FormatListBulleted /></IconButton>
+                <IconButton size="small"><FormatListNumbered /></IconButton>
+                <Divider orientation="vertical" flexItem />
+                <IconButton size="small"><EmojiEmotions /></IconButton>
+                <IconButton size="small"><LinkIcon /></IconButton>
+                <IconButton size="small"><Image /></IconButton>
+                <Divider orientation="vertical" flexItem />
+                <IconButton size="small"><FormatAlignLeft /></IconButton>
+                <IconButton size="small"><FormatAlignCenter /></IconButton>
+                <IconButton size="small"><FormatAlignRight /></IconButton>
+              </Box>
+
+              <TextField
+                variant="outlined"
+                fullWidth
+                multiline
+                rows={6}
+                value={questionForm.description}
+                onChange={(e) => handleQuestionFormChange('description', e.target.value)}
+                placeholder="Provide a detailed description of your question..."
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '0 0 8px 8px',
+                    '& fieldset': {
+                      borderTop: 'none',
+                    },
+                  },
+                }}
+              />
+            </Box>
+
+            {/* Tags */}
+            <Box>
+              <Typography variant="body1" fontWeight="medium" sx={{ mb: 1 }}>
+                Tags
+              </Typography>
+              <TextField
+                variant="outlined"
+                fullWidth
+                value={questionForm.tags}
+                onChange={(e) => handleQuestionFormChange('tags', e.target.value)}
+                placeholder="Add relevant tags separated by commas (e.g., javascript, react, html)"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                  },
+                }}
+              />
+            </Box>
+          </Stack>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 3, pt: 2 }}>
+          <Box display="flex" justifyContent="center" width="100%">
+            <Button
+              onClick={handleSubmitQuestion}
+              variant="contained"
+              size="large"
+              sx={{
+                textTransform: 'none',
+                bgcolor: '#6366f1',
+                '&:hover': { bgcolor: '#4f46e5' },
+                borderRadius: 2,
+                px: 4,
+                py: 1.5,
+                fontWeight: 500
+              }}
+            >
+              Submit
+            </Button>
+          </Box>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 }
