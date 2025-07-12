@@ -1,5 +1,5 @@
 # StackIt
-- Team Name: SNaRledCoders
+- Team Name: SNaRledCoders (Team 0274)
 - Team Members: Shrey (L), Razin, Niralee
 - Occasion: Odoo Hackathon 2025
 

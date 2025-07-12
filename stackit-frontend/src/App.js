@@ -1,4 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+  useUser
+} from '@clerk/clerk-react';
 import {
   AppBar,
   Toolbar,
@@ -176,11 +184,33 @@ const mockQuestions = [
 ];
 
 function App() {
-  const [questions, setQuestions] = useState(mockQuestions);
+  const { user, isLoaded } = useUser();
+
+  // Helper functions for localStorage
+  const loadFromStorage = (key, defaultValue) => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+      console.error(`Error loading ${key} from localStorage:`, error);
+      return defaultValue;
+    }
+  };
+
+  const saveToStorage = (key, value) => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error(`Error saving ${key} to localStorage:`, error);
+    }
+  };
+
+  // Initialize state with localStorage data or defaults
+  const [questions, setQuestions] = useState(() => loadFromStorage('stackit_questions', mockQuestions));
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('Newest');
+  const [sortBy, setSortBy] = useState(() => loadFromStorage('stackit_sortBy', 'Newest'));
   const [notificationAnchor, setNotificationAnchor] = useState(null);
-  const [notifications] = useState(3); // Mock notification count
+  const [notifications] = useState(() => loadFromStorage('stackit_notifications', 3));
   const [currentView, setCurrentView] = useState('questions'); // 'questions' or 'question-detail'
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [newAnswer, setNewAnswer] = useState('');
@@ -191,6 +221,45 @@ function App() {
     tags: ''
   });
   const [answerSubmitted, setAnswerSubmitted] = useState(false);
+  const [userVotes, setUserVotes] = useState(() => loadFromStorage('stackit_userVotes', {})); // Track user's votes: { questionId: 'up'/'down', answerId: 'up'/'down' }
+
+  // Save data to localStorage whenever state changes
+  useEffect(() => {
+    saveToStorage('stackit_questions', questions);
+  }, [questions]);
+
+  useEffect(() => {
+    saveToStorage('stackit_sortBy', sortBy);
+  }, [sortBy]);
+
+  useEffect(() => {
+    saveToStorage('stackit_userVotes', userVotes);
+  }, [userVotes]);
+
+  // Clear all localStorage data (useful for testing)
+  const clearAllData = () => {
+    const keys = ['stackit_questions', 'stackit_sortBy', 'stackit_userVotes', 'stackit_notifications'];
+    keys.forEach(key => {
+      try {
+        window.localStorage.removeItem(key);
+      } catch (error) {
+        console.error(`Error removing ${key} from localStorage:`, error);
+      }
+    });
+    // Reset to defaults
+    setQuestions(mockQuestions);
+    setSortBy('Newest');
+    setUserVotes({});
+    console.log('All StackIt data cleared from localStorage');
+  };
+
+  // Expose clearAllData to window for debugging (remove in production)
+  useEffect(() => {
+    window.clearStackItData = clearAllData;
+    return () => {
+      delete window.clearStackItData;
+    };
+  }, []);
 
   const handleNotificationClick = (event) => {
     setNotificationAnchor(event.currentTarget);
@@ -211,11 +280,140 @@ function App() {
   };
 
   const handleAnswerVote = (questionId, answerId, type) => {
-    // Handle answer voting logic here
-    console.log(`Voted ${type} on answer ${answerId} for question ${questionId}`);
+    if (!user) {
+      alert('Please sign in to vote.');
+      return;
+    }
+
+    const voteKey = `answer_${answerId}`;
+    const currentVote = userVotes[voteKey];
+
+    // Update questions state with new vote counts
+    setQuestions(prevQuestions =>
+      prevQuestions.map(question =>
+        question.id === questionId
+          ? {
+            ...question,
+            answersData: question.answersData.map(answer =>
+              answer.id === answerId
+                ? {
+                  ...answer,
+                  votes: currentVote === type
+                    ? answer.votes - 1 // Remove vote if clicking same button
+                    : currentVote
+                      ? answer.votes + (type === 'up' ? 2 : -2) // Change from opposite vote
+                      : answer.votes + (type === 'up' ? 1 : -1) // Add new vote
+                }
+                : answer
+            )
+          }
+          : question
+      )
+    );
+
+    // Update selected question if it's the current one
+    if (selectedQuestion?.id === questionId) {
+      setSelectedQuestion(prev => ({
+        ...prev,
+        answersData: prev.answersData.map(answer =>
+          answer.id === answerId
+            ? {
+              ...answer,
+              votes: currentVote === type
+                ? answer.votes - 1
+                : currentVote
+                  ? answer.votes + (type === 'up' ? 2 : -2)
+                  : answer.votes + (type === 'up' ? 1 : -1)
+            }
+            : answer
+        )
+      }));
+    }
+
+    // Update user votes
+    setUserVotes(prev => ({
+      ...prev,
+      [voteKey]: currentVote === type ? null : type
+    }));
+  };
+
+  const handleQuestionVote = (questionId, type) => {
+    if (!user) {
+      alert('Please sign in to vote.');
+      return;
+    }
+
+    const voteKey = `question_${questionId}`;
+    const currentVote = userVotes[voteKey];
+
+    // Update questions state with new vote counts
+    setQuestions(prevQuestions =>
+      prevQuestions.map(question =>
+        question.id === questionId
+          ? {
+            ...question,
+            votes: currentVote === type
+              ? question.votes - 1 // Remove vote if clicking same button
+              : currentVote
+                ? question.votes + (type === 'up' ? 2 : -2) // Change from opposite vote
+                : question.votes + (type === 'up' ? 1 : -1) // Add new vote
+          }
+          : question
+      )
+    );
+
+    // Update selected question if it's the current one
+    if (selectedQuestion?.id === questionId) {
+      setSelectedQuestion(prev => ({
+        ...prev,
+        votes: currentVote === type
+          ? prev.votes - 1
+          : currentVote
+            ? prev.votes + (type === 'up' ? 2 : -2)
+            : prev.votes + (type === 'up' ? 1 : -1)
+      }));
+    }
+
+    // Update user votes
+    setUserVotes(prev => ({
+      ...prev,
+      [voteKey]: currentVote === type ? null : type
+    }));
+  };
+
+  const handleAcceptAnswer = (questionId, answerId) => {
+    // Update questions state
+    setQuestions(prevQuestions =>
+      prevQuestions.map(question =>
+        question.id === questionId
+          ? {
+            ...question,
+            answersData: question.answersData.map(answer => ({
+              ...answer,
+              isAccepted: answer.id === answerId ? !answer.isAccepted : false
+            }))
+          }
+          : question
+      )
+    );
+
+    // Update selected question if it's the current one
+    if (selectedQuestion?.id === questionId) {
+      setSelectedQuestion(prev => ({
+        ...prev,
+        answersData: prev.answersData.map(answer => ({
+          ...answer,
+          isAccepted: answer.id === answerId ? !answer.isAccepted : false
+        }))
+      }));
+    }
   };
 
   const handleAskQuestionOpen = () => {
+    if (!user) {
+      alert('Please sign in to ask a question.');
+      return;
+    }
     setAskQuestionOpen(true);
   };
 
@@ -232,13 +430,41 @@ function App() {
   };
 
   const handleSubmitQuestion = () => {
-    // For now, just log the form data
-    console.log('Submitting question:', questionForm);
-    // Close the modal
+    if (!questionForm.title.trim() || !questionForm.description.trim()) {
+      alert('Please fill in both title and description.');
+      return;
+    }
+
+    // Create new question object
+    const newQuestion = {
+      id: Date.now(),
+      title: questionForm.title,
+      description: questionForm.description,
+      tags: questionForm.tags ? questionForm.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
+      user: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.emailAddresses?.[0]?.emailAddress || 'Anonymous User' : 'Anonymous User',
+      answers: 0,
+      votes: 0,
+      views: 0,
+      timeAgo: 'just now',
+      answersData: []
+    };
+
+    // Add to questions list
+    setQuestions(prev => [newQuestion, ...prev]);
+
+    // Close modal and reset form
     handleAskQuestionClose();
+
+    // Show success message
+    alert('Your question has been posted successfully!');
   };
 
   const handleSubmitAnswer = () => {
+    if (!user) {
+      alert('Please sign in to post an answer.');
+      return;
+    }
+
     if (!newAnswer.trim()) {
       alert('Please write an answer before submitting.');
       return;
@@ -248,7 +474,7 @@ function App() {
     const newAnswerObj = {
       id: Date.now(), // Simple ID generation
       content: newAnswer,
-      author: 'Current User', // In a real app, this would come from auth
+      author: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.emailAddresses?.[0]?.emailAddress || 'Anonymous User' : 'Anonymous User',
       votes: 0,
       timeAgo: 'just now',
       isAccepted: false
@@ -385,13 +611,27 @@ function App() {
               <Box display="flex" gap={2}>
                 {/* Question Voting */}
                 <Box display="flex" flexDirection="column" alignItems="center" minWidth={60}>
-                  <IconButton size="small">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleQuestionVote(question.id, 'up')}
+                    sx={{
+                      color: userVotes[`question_${question.id}`] === 'up' ? '#10b981' : 'inherit',
+                      '&:hover': { color: '#10b981' }
+                    }}
+                  >
                     <ArrowUpward fontSize="small" sx={{ fontWeight: 'bold' }} />
                   </IconButton>
                   <Typography variant="h6" fontWeight="bold">
                     {question.votes}
                   </Typography>
-                  <IconButton size="small">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleQuestionVote(question.id, 'down')}
+                    sx={{
+                      color: userVotes[`question_${question.id}`] === 'down' ? '#ef4444' : 'inherit',
+                      '&:hover': { color: '#ef4444' }
+                    }}
+                  >
                     <ArrowDownward fontSize="small" sx={{ fontWeight: 'bold' }} />
                   </IconButton>
                   <IconButton size="small" sx={{ mt: 2 }}>
@@ -456,6 +696,10 @@ function App() {
                     <IconButton
                       size="small"
                       onClick={() => handleAnswerVote(question.id, answer.id, 'up')}
+                      sx={{
+                        color: userVotes[`answer_${answer.id}`] === 'up' ? '#10b981' : 'inherit',
+                        '&:hover': { color: '#10b981' }
+                      }}
                     >
                       <ArrowUpward fontSize="small" sx={{ fontWeight: 'bold' }} />
                     </IconButton>
@@ -465,17 +709,53 @@ function App() {
                     <IconButton
                       size="small"
                       onClick={() => handleAnswerVote(question.id, answer.id, 'down')}
+                      sx={{
+                        color: userVotes[`answer_${answer.id}`] === 'down' ? '#ef4444' : 'inherit',
+                        '&:hover': { color: '#ef4444' }
+                      }}
                     >
                       <ArrowDownward fontSize="small" sx={{ fontWeight: 'bold' }} />
                     </IconButton>
-                    {answer.isAccepted && (
-                      <Chip
-                        label="✓ Accepted"
-                        size="small"
-                        color="success"
-                        sx={{ mt: 2, fontSize: '0.7rem' }}
-                      />
-                    )}
+
+                    {/* Accept Answer Button - Only show for question owner */}
+                    <IconButton
+                      size="small"
+                      onClick={() => handleAcceptAnswer(question.id, answer.id)}
+                      sx={{
+                        mt: 1,
+                        color: answer.isAccepted ? '#10b981' : '#9ca3af',
+                        '&:hover': { color: '#10b981' }
+                      }}
+                      title={answer.isAccepted ? 'Remove acceptance' : 'Accept this answer'}
+                    >
+                      {answer.isAccepted ? (
+                        <Chip
+                          label="✓ Accepted"
+                          size="small"
+                          sx={{
+                            bgcolor: '#10b981',
+                            color: 'white',
+                            fontSize: '0.7rem',
+                            fontWeight: 'bold'
+                          }}
+                        />
+                      ) : (
+                        <Chip
+                          label="Accept"
+                          size="small"
+                          variant="outlined"
+                          sx={{
+                            borderColor: '#9ca3af',
+                            color: '#9ca3af',
+                            fontSize: '0.7rem',
+                            '&:hover': {
+                              borderColor: '#10b981',
+                              color: '#10b981'
+                            }
+                          }}
+                        />
+                      )}
+                    </IconButton>
                   </Box>
 
                   {/* Answer Content */}
@@ -818,32 +1098,52 @@ function App() {
               </MenuItem>
             </Menu>
 
-            <Button
-              variant="contained"
-              size="medium"
-              sx={{
-                bgcolor: '#ec4899',
-                '&:hover': { bgcolor: '#db2777' },
-                textTransform: 'none',
-                fontWeight: 500,
-                display: { xs: 'none', sm: 'flex' },
-                fontSize: { xs: '0.75rem', sm: '0.875rem' }
-              }}
-            >
-              Login
-            </Button>
+            <SignedOut>
+              <SignInButton mode="modal">
+                <Button
+                  variant="contained"
+                  size="medium"
+                  sx={{
+                    bgcolor: '#ec4899',
+                    '&:hover': { bgcolor: '#db2777' },
+                    textTransform: 'none',
+                    fontWeight: 500,
+                    display: { xs: 'none', sm: 'flex' },
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                  }}
+                >
+                  Login
+                </Button>
+              </SignInButton>
 
-            {/* Mobile Login Button */}
-            <IconButton
-              sx={{
-                bgcolor: '#ec4899',
-                '&:hover': { bgcolor: '#db2777' },
-                color: 'white',
-                display: { xs: 'flex', sm: 'none' }
-              }}
-            >
-              <Person />
-            </IconButton>
+              {/* Mobile Login Button */}
+              <SignInButton mode="modal">
+                <IconButton
+                  sx={{
+                    bgcolor: '#ec4899',
+                    '&:hover': { bgcolor: '#db2777' },
+                    color: 'white',
+                    display: { xs: 'flex', sm: 'none' }
+                  }}
+                >
+                  <Person />
+                </IconButton>
+              </SignInButton>
+            </SignedOut>
+
+            <SignedIn>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: {
+                      width: '40px',
+                      height: '40px'
+                    }
+                  }
+                }}
+                afterSignOutUrl="/"
+              />
+            </SignedIn>
           </Box>
         </Toolbar>
       </AppBar>
@@ -1189,6 +1489,7 @@ function App() {
               onClick={handleSubmitQuestion}
               variant="contained"
               size="large"
+              disabled={!questionForm.title.trim() || !questionForm.description.trim()}
               sx={{
                 textTransform: 'none',
                 bgcolor: '#6366f1',
@@ -1196,7 +1497,11 @@ function App() {
                 borderRadius: 2,
                 px: 4,
                 py: 1.5,
-                fontWeight: 500
+                fontWeight: 500,
+                '&:disabled': {
+                  bgcolor: '#9ca3af',
+                  color: '#ffffff'
+                }
               }}
             >
               Submit
