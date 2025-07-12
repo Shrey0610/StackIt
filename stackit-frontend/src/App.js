@@ -3,7 +3,6 @@ import {
   SignedIn,
   SignedOut,
   SignInButton,
-  SignUpButton,
   UserButton,
   useUser
 } from '@clerk/clerk-react';
@@ -184,7 +183,56 @@ const mockQuestions = [
 ];
 
 function App() {
-  const { user, isLoaded } = useUser();
+  const { user } = useUser();
+
+  // User roles and permissions system
+  const USER_ROLES = {
+    GUEST: 'guest',
+    USER: 'user',
+    ADMIN: 'admin'
+  };
+
+  // Helper function to get user role
+  const getUserRole = (user) => {
+    if (!user) return USER_ROLES.GUEST;
+
+    // Check user's public metadata for role (this would be set via Clerk Dashboard or API)
+    const role = user.publicMetadata?.role;
+
+    // Default new users to 'user' role, admins must be set manually
+    return role || USER_ROLES.USER;
+  };
+
+  // Role-based permissions
+  const PERMISSIONS = {
+    [USER_ROLES.GUEST]: {
+      canView: true,
+      canVote: false,
+      canPost: false,
+      canModerate: false
+    },
+    [USER_ROLES.USER]: {
+      canView: true,
+      canVote: true,
+      canPost: true,
+      canModerate: false
+    },
+    [USER_ROLES.ADMIN]: {
+      canView: true,
+      canVote: true,
+      canPost: true,
+      canModerate: true
+    }
+  };
+
+  // Helper function to check permissions
+  const hasPermission = (permission) => {
+    const userRole = getUserRole(user);
+    return PERMISSIONS[userRole]?.[permission] || false;
+  };
+
+  // Get current user role for display
+  const currentUserRole = getUserRole(user);
 
   // Helper functions for localStorage
   const loadFromStorage = (key, defaultValue) => {
@@ -280,8 +328,11 @@ function App() {
   };
 
   const handleAnswerVote = (questionId, answerId, type) => {
-    if (!user) {
-      alert('Please sign in to vote.');
+    if (!hasPermission('canVote')) {
+      const message = !user
+        ? 'Please sign in to vote.'
+        : 'You do not have permission to vote.';
+      alert(message);
       return;
     }
 
@@ -338,8 +389,11 @@ function App() {
   };
 
   const handleQuestionVote = (questionId, type) => {
-    if (!user) {
-      alert('Please sign in to vote.');
+    if (!hasPermission('canVote')) {
+      const message = !user
+        ? 'Please sign in to vote.'
+        : 'You do not have permission to vote.';
+      alert(message);
       return;
     }
 
@@ -410,8 +464,11 @@ function App() {
   };
 
   const handleAskQuestionOpen = () => {
-    if (!user) {
-      alert('Please sign in to ask a question.');
+    if (!hasPermission('canPost')) {
+      const message = !user
+        ? 'Please sign in to ask a question.'
+        : 'You do not have permission to post questions.';
+      alert(message);
       return;
     }
     setAskQuestionOpen(true);
@@ -460,8 +517,11 @@ function App() {
   };
 
   const handleSubmitAnswer = () => {
-    if (!user) {
-      alert('Please sign in to post an answer.');
+    if (!hasPermission('canPost')) {
+      const message = !user
+        ? 'Please sign in to post an answer.'
+        : 'You do not have permission to post answers.';
+      alert(message);
       return;
     }
 
@@ -1132,6 +1192,19 @@ function App() {
             </SignedOut>
 
             <SignedIn>
+              {/* User Role Badge */}
+              <Chip
+                label={currentUserRole.toUpperCase()}
+                size="small"
+                sx={{
+                  bgcolor: currentUserRole === 'admin' ? '#ef4444' : currentUserRole === 'user' ? '#10b981' : '#6b7280',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  display: { xs: 'none', sm: 'flex' },
+                  mr: 1
+                }}
+              />
+
               <UserButton
                 appearance={{
                   elements: {
