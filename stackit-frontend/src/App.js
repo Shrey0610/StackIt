@@ -179,6 +179,7 @@ const mockQuestions = [
 
 function App() {
   const { user } = useUser();
+  const [backendUser, setBackendUser] = useState(null);
 
   // User roles and permissions system
   const USER_ROLES = {
@@ -187,14 +188,45 @@ function App() {
     ADMIN: 'admin'
   };
 
+  // Fetch user data from backend when user changes
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (user && user.id) {
+        try {
+          const token = await user.getToken();
+          const response = await fetch('http://localhost:5000/api/users/profile', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          if (response.ok) {
+            const userData = await response.json();
+            setBackendUser(userData);
+            console.log('Fetched user data from backend:', userData);
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+        }
+      } else {
+        setBackendUser(null);
+      }
+    };
+
+    fetchUserData();
+  }, [user]);
+
   // Helper function to get user role
   const getUserRole = (user) => {
     if (!user) return USER_ROLES.GUEST;
 
-    // Check user's public metadata for role (this would be set via Clerk Dashboard or API)
-    const role = user.publicMetadata?.role;
+    // Use backend user role if available, otherwise default to user
+    if (backendUser && backendUser.role) {
+      return backendUser.role;
+    }
 
-    // Default new users to 'user' role, admins must be set manually
+    // Fallback to Clerk metadata if backend user not loaded yet
+    const role = user.publicMetadata?.role;
     return role || USER_ROLES.USER;
   };
 
@@ -254,7 +286,7 @@ function App() {
   const [sortBy, setSortBy] = useState(() => loadFromStorage('stackit_sortBy', 'Newest'));
   const [notificationAnchor, setNotificationAnchor] = useState(null);
   const [notifications] = useState(() => loadFromStorage('stackit_notifications', 3));
-  const [currentView, setCurrentView] = useState(() => loadFromStorage('stackit_currentView', 'questions')); // 'questions' or 'question-detail'
+  const [currentView, setCurrentView] = useState(() => loadFromStorage('stackit_currentView', 'questions')); // 'questions' or 'question-detail' or 'admin'
   const [selectedQuestion, setSelectedQuestion] = useState(() => loadFromStorage('stackit_selectedQuestion', null));
   const [askQuestionOpen, setAskQuestionOpen] = useState(false);
   const [questionForm, setQuestionForm] = useState({
@@ -344,6 +376,57 @@ function App() {
   const handleBackToQuestions = () => {
     setCurrentView('questions');
     setSelectedQuestion(null);
+  };
+
+  const handlePromoteToAdmin = async () => {
+    if (!user) {
+      alert('Please sign in first');
+      return;
+    }
+
+    try {
+      console.log('Attempting to promote to admin...');
+      console.log('User:', user);
+
+      // Make API call to check if user is admin (no input needed)
+      const response = await fetch('http://localhost:5000/api/admin/promote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await user.getToken()}`
+        },
+        body: JSON.stringify({}) // No body needed
+      });
+
+      console.log('Response status:', response.status);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Success response:', data);
+        alert(`Success! ${data.message}`);
+
+        // Refresh backend user data to update role
+        const token = await user.getToken();
+        const userResponse = await fetch('http://localhost:5000/api/users/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setBackendUser(userData);
+          console.log('Updated user data:', userData);
+        }
+      } else {
+        const error = await response.json();
+        console.log('Error response:', error);
+        alert(`Error: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error checking admin:', error);
+      alert('Failed to verify admin status. Please try again.');
+    }
   };
 
   const handleAnswerVote = (questionId, answerId, type) => {
@@ -1206,6 +1289,56 @@ function App() {
               </MenuItem>
             </Menu>
 
+            {/* Admin Menu - Only show for admins */}
+            <SignedIn>
+              {currentUserRole === 'admin' && (
+                <>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setCurrentView('admin')}
+                    sx={{
+                      color: '#ef4444',
+                      borderColor: '#ef4444',
+                      textTransform: 'none',
+                      '&:hover': {
+                        bgcolor: '#fef2f2',
+                        borderColor: '#dc2626'
+                      },
+                      display: { xs: 'none', sm: 'flex' }
+                    }}
+                  >
+                    Admin Panel
+                  </Button>
+                </>
+              )}
+            </SignedIn>
+
+            {/* Promote to Admin Button - Show for first user or if no admin exists */}
+            <SignedIn>
+              {(currentUserRole === 'user' || currentUserRole === 'guest') && (
+                <>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handlePromoteToAdmin}
+                    sx={{
+                      color: '#f59e0b',
+                      borderColor: '#f59e0b',
+                      textTransform: 'none',
+                      '&:hover': {
+                        bgcolor: '#fffbeb',
+                        borderColor: '#d97706'
+                      },
+                      display: { xs: 'none', sm: 'flex' }
+                    }}
+                  >
+                    Become Admin
+                  </Button>
+                </>
+              )}
+            </SignedIn>
+
             <SignedOut>
               <SignInButton mode="modal">
                 <Button
@@ -1486,9 +1619,154 @@ function App() {
             </Box>
           </Box>
         </Container>
-      ) : (
+      ) : currentView === 'question-detail' ? (
         /* Question Detail Page */
         <QuestionDetailPage key={selectedQuestion?.id} question={selectedQuestion} />
+      ) : currentView === 'admin' ? (
+        /* Admin Panel */
+        <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 } }}>
+          <Box mb={3}>
+            <Typography variant="h4" sx={{ fontWeight: 500, mb: 2 }}>
+              Admin Panel
+            </Typography>
+            <Button
+              variant="outlined"
+              onClick={() => setCurrentView('questions')}
+              sx={{ textTransform: 'none' }}
+            >
+              ← Back to Questions
+            </Button>
+          </Box>
+
+          <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={3}>
+            {/* Admin Stats */}
+            <Box flex={1}>
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Platform Statistics
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr' }} gap={2}>
+                    <Box>
+                      <Typography variant="h4" color="primary">
+                        {questions.length}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Total Questions
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="h4" color="secondary">
+                        {questions.reduce((sum, q) => sum + (q.answersData?.length || 0), 0)}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Total Answers
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+
+              {/* Recent Questions */}
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Recent Questions (Admin View)
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  {questions.slice(0, 5).map((question) => (
+                    <Box key={question.id} display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Box flex={1}>
+                        <Typography variant="body1" noWrap>
+                          {question.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          by {question.user} • {question.timeAgo}
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this question?')) {
+                            // Delete question logic here
+                            setQuestions(prev => prev.filter(q => q.id !== question.id));
+                            alert('Question deleted successfully!');
+                          }
+                        }}
+                        sx={{ textTransform: 'none', ml: 2 }}
+                      >
+                        Delete
+                      </Button>
+                    </Box>
+                  ))}
+                </CardContent>
+              </Card>
+            </Box>
+
+            {/* Admin Actions */}
+            <Box width={{ xs: '100%', md: 300 }}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Admin Actions
+                  </Typography>
+                  <Divider sx={{ mb: 2 }} />
+                  <Stack spacing={2}>
+                    <Button
+                      variant="contained"
+                      fullWidth
+                      onClick={() => alert('User management feature coming soon!')}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Manage Users
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={() => {
+                        if (window.confirm('This will clear all StackIt data. Are you sure?')) {
+                          clearAllData();
+                          alert('All data cleared!');
+                        }
+                      }}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Clear All Data
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="info"
+                      fullWidth
+                      onClick={() => {
+                        console.log('Current app state:', {
+                          questions: questions.length,
+                          currentView,
+                          selectedQuestion,
+                          userRole: currentUserRole
+                        });
+                        alert('State logged to console (F12)');
+                      }}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Debug Info
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Box>
+          </Box>
+        </Container>
+      ) : (
+        /* Fallback */
+        <Container maxWidth="lg" sx={{ py: 3, textAlign: 'center' }}>
+          <Typography variant="h5">Page not found</Typography>
+          <Button onClick={() => setCurrentView('questions')} sx={{ mt: 2 }}>
+            Go to Questions
+          </Button>
+        </Container>
       )}
 
       {/* Ask Question Dialog */}

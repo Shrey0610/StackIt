@@ -53,10 +53,13 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+const adminRoutes = require('./routes/admin');
+
 app.use('/api/questions', questionRoutes);
 app.use('/api/answers', answerRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Catch-all route for undefined endpoints
 app.use('*', (req, res) => {

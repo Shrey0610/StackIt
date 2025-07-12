@@ -22,16 +22,30 @@ const getCurrentUser = async (req, res, next) => {
             if (!user) {
                 // If user doesn't exist, create from Clerk data
                 const clerkUser = req.auth.user || {};
+                const userEmail = clerkUser.emailAddresses?.[0]?.emailAddress || '';
+
+                // Check if this email should be an admin
+                const ADMIN_EMAIL = "work.shreyshah21@gmail.com";
+                const userRole = userEmail === ADMIN_EMAIL ? 'admin' : 'user';
+
                 user = new User({
                     clerkId,
-                    email: clerkUser.emailAddresses?.[0]?.emailAddress || '',
+                    email: userEmail,
                     firstName: clerkUser.firstName || 'User',
                     lastName: clerkUser.lastName || '',
                     username: clerkUser.username,
-                    role: 'user' // Default role
+                    role: userRole
                 });
                 await user.save();
-                console.log(`✅ Created new user: ${user.email}`);
+                console.log(`✅ Created new user: ${user.email} with role: ${user.role}`);
+            } else {
+                // For existing users, check if they should be promoted to admin
+                const ADMIN_EMAIL = "work.shreyshah21@gmail.com";
+                if (user.email === ADMIN_EMAIL && user.role !== 'admin') {
+                    user.role = 'admin';
+                    await user.save();
+                    console.log(`✅ Promoted user to admin: ${user.email}`);
+                }
             }
 
             req.user = user;
