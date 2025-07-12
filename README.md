@@ -8,6 +8,12 @@ StackIt is a minimal question-and-answer platform that supports collaborative
 learning and structured knowledge sharing. It’s designed to be simple, user-friendly,
 and focused on the core experience of asking and answering questions within a community.
 
+## Working Video
+
+[![Watch the demo](https://img.youtube.com/vi/1XpwWSBeOBOnVVvguAdRkEzbtem8hGUaU/0.jpg)](https://drive.google.com/file/d/1XpwWSBeOBOnVVvguAdRkEzbtem8hGUaU/view?usp=sharing)
+
+[Click here to watch the demo video](https://drive.google.com/file/d/1XpwWSBeOBOnVVvguAdRkEzbtem8hGUaU/view?usp=sharing)
+
 ## Progress:
 ![StackIt Screenshot](/SS/Screenshot%202025-07-12%20at%2012.51.22.png)
 ![StackIt Screenshot](/SS/Screenshot%202025-07-12%20at%2012.51.27.png)
