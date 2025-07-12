@@ -176,6 +176,7 @@ const mockQuestions = [
 ];
 
 function App() {
+  const [questions, setQuestions] = useState(mockQuestions);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('Newest');
   const [notificationAnchor, setNotificationAnchor] = useState(null);
@@ -189,6 +190,7 @@ function App() {
     description: '',
     tags: ''
   });
+  const [answerSubmitted, setAnswerSubmitted] = useState(false);
 
   const handleNotificationClick = (event) => {
     setNotificationAnchor(event.currentTarget);
@@ -234,8 +236,59 @@ function App() {
     console.log('Submitting question:', questionForm);
     // Close the modal
     handleAskQuestionClose();
-  };  // Filter questions based on search term
-  const filteredQuestions = mockQuestions.filter(question => {
+  };
+
+  const handleSubmitAnswer = () => {
+    if (!newAnswer.trim()) {
+      alert('Please write an answer before submitting.');
+      return;
+    }
+
+    // Create a new answer object
+    const newAnswerObj = {
+      id: Date.now(), // Simple ID generation
+      content: newAnswer,
+      author: 'Current User', // In a real app, this would come from auth
+      votes: 0,
+      timeAgo: 'just now',
+      isAccepted: false
+    };
+
+    // Update the questions state
+    setQuestions(prevQuestions =>
+      prevQuestions.map(question =>
+        question.id === selectedQuestion.id
+          ? {
+            ...question,
+            answers: question.answers + 1,
+            answersData: [...(question.answersData || []), newAnswerObj]
+          }
+          : question
+      )
+    );
+
+    // Update the selected question state
+    const updatedQuestion = {
+      ...selectedQuestion,
+      answers: selectedQuestion.answers + 1,
+      answersData: [...(selectedQuestion.answersData || []), newAnswerObj]
+    };
+    setSelectedQuestion(updatedQuestion);
+
+    // Clear the answer input
+    setNewAnswer('');
+
+    // Show success message
+    setAnswerSubmitted(true);
+    setTimeout(() => setAnswerSubmitted(false), 3000); // Hide after 3 seconds
+  };
+
+  const handleCancelAnswer = () => {
+    setNewAnswer('');
+  };
+
+  // Filter questions based on search term
+  const filteredQuestions = questions.filter(question => {
     if (!searchTerm.trim()) return true; // Show all questions if no search term
 
     const searchLower = searchTerm.toLowerCase();
@@ -503,19 +556,44 @@ function App() {
               }}
             />
 
+            {/* Success Message */}
+            {answerSubmitted && (
+              <Box
+                mt={2}
+                p={2}
+                sx={{
+                  bgcolor: '#d1fae5',
+                  border: '1px solid #10b981',
+                  borderRadius: 2,
+                  color: '#065f46'
+                }}
+              >
+                <Typography variant="body2" fontWeight="medium">
+                  ✓ Your answer has been posted successfully!
+                </Typography>
+              </Box>
+            )}
+
             <Box mt={3} display="flex" justifyContent="flex-end" gap={2}>
               <Button
                 variant="outlined"
                 sx={{ textTransform: 'none' }}
+                onClick={handleCancelAnswer}
               >
                 Cancel
               </Button>
               <Button
                 variant="contained"
+                onClick={handleSubmitAnswer}
+                disabled={!newAnswer.trim()}
                 sx={{
                   bgcolor: '#6366f1',
                   '&:hover': { bgcolor: '#4f46e5' },
-                  textTransform: 'none'
+                  textTransform: 'none',
+                  '&:disabled': {
+                    bgcolor: '#9ca3af',
+                    color: '#ffffff'
+                  }
                 }}
               >
                 Post Your Answer
@@ -817,9 +895,9 @@ function App() {
               >
                 <Typography variant="body1">
                   {sortedAndFilteredQuestions.length} questions
-                  {searchTerm.trim() && sortedAndFilteredQuestions.length !== mockQuestions.length && (
+                  {searchTerm.trim() && sortedAndFilteredQuestions.length !== questions.length && (
                     <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
-                      (filtered from {mockQuestions.length})
+                      (filtered from {questions.length})
                     </Typography>
                   )}
                 </Typography>
