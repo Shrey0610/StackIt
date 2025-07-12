@@ -148,6 +148,30 @@ const mockQuestions = [
         isAccepted: true
       }
     ]
+  },
+  {
+    id: 4,
+    title: "How to center a div using CSS Grid?",
+    description: "I'm trying to center a div both horizontally and vertically using CSS Grid, but I can't seem to get it right. What's the proper way to do this?",
+    tags: ["css", "css-grid", "layout"],
+    user: "Alex Brown",
+    answers: 0,
+    votes: 3,
+    views: 45,
+    timeAgo: "3 hours ago",
+    answersData: []
+  },
+  {
+    id: 5,
+    title: "Best practices for API error handling in Node.js",
+    description: "What are the recommended approaches for handling errors in a REST API built with Node.js and Express? Should I use try-catch blocks everywhere?",
+    tags: ["nodejs", "express", "error-handling", "api"],
+    user: "Sarah Wilson",
+    answers: 0,
+    votes: 7,
+    views: 123,
+    timeAgo: "5 hours ago",
+    answersData: []
   }
 ];
 
@@ -210,7 +234,47 @@ function App() {
     console.log('Submitting question:', questionForm);
     // Close the modal
     handleAskQuestionClose();
-  };
+  };  // Filter questions based on search term
+  const filteredQuestions = mockQuestions.filter(question => {
+    if (!searchTerm.trim()) return true; // Show all questions if no search term
+
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      question.title.toLowerCase().includes(searchLower) ||
+      question.description.toLowerCase().includes(searchLower) ||
+      question.tags.some(tag => tag.toLowerCase().includes(searchLower)) ||
+      question.user.toLowerCase().includes(searchLower)
+    );
+  });
+
+  // Sort and filter questions based on sortBy
+  const sortedAndFilteredQuestions = [...filteredQuestions].filter(question => {
+    // Apply filter based on sortBy
+    switch (sortBy) {
+      case 'Unanswered':
+        return question.answers === 0;
+      case 'Most Voted':
+        return true; // Show all, will be sorted by votes
+      case 'Most Viewed':
+        return true; // Show all, will be sorted by views
+      case 'Newest':
+      default:
+        return true; // Show all for newest
+    }
+  }).sort((a, b) => {
+    // Apply sorting based on sortBy
+    switch (sortBy) {
+      case 'Most Voted':
+        return b.votes - a.votes;
+      case 'Most Viewed':
+        return b.views - a.views;
+      case 'Unanswered':
+      case 'Newest':
+      default:
+        // Sort by newest (assuming questions with lower id are newer)
+        return a.id - b.id;
+    }
+  });
 
   const QuestionDetailPage = ({ question }) => (
     <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 } }}>
@@ -620,10 +684,10 @@ function App() {
             StackIt
           </Typography>
 
-          <Box sx={{ flexGrow: 1, mx: { xs: 1, sm: 2, md: 4 } }}>
+          <Box sx={{ flexGrow: 1, mx: { xs: 1, sm: 2, md: 3 } }}>
             <TextField
               fullWidth
-              placeholder="Search..."
+              placeholder="Search questions, tags, or users..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -752,7 +816,12 @@ function App() {
                 gap={{ xs: 2, sm: 0 }}
               >
                 <Typography variant="body1">
-                  {mockQuestions.length} questions
+                  {sortedAndFilteredQuestions.length} questions
+                  {searchTerm.trim() && sortedAndFilteredQuestions.length !== mockQuestions.length && (
+                    <Typography variant="body2" color="text.secondary" component="span" sx={{ ml: 1 }}>
+                      (filtered from {mockQuestions.length})
+                    </Typography>
+                  )}
                 </Typography>
 
                 <Box
@@ -765,7 +834,15 @@ function App() {
                     variant={sortBy === 'Newest' ? 'contained' : 'outlined'}
                     size="small"
                     onClick={() => setSortBy('Newest')}
-                    sx={{ textTransform: 'none' }}
+                    sx={{
+                      textTransform: 'none',
+                      bgcolor: sortBy === 'Newest' ? '#6366f1' : 'transparent',
+                      color: sortBy === 'Newest' ? 'white' : '#6366f1',
+                      borderColor: '#6366f1',
+                      '&:hover': {
+                        bgcolor: sortBy === 'Newest' ? '#4f46e5' : '#f3f4f6',
+                      }
+                    }}
                     fullWidth={{ xs: true, sm: false }}
                   >
                     Newest
@@ -774,21 +851,41 @@ function App() {
                     variant={sortBy === 'Unanswered' ? 'contained' : 'outlined'}
                     size="small"
                     onClick={() => setSortBy('Unanswered')}
-                    sx={{ textTransform: 'none' }}
+                    sx={{
+                      textTransform: 'none',
+                      bgcolor: sortBy === 'Unanswered' ? '#6366f1' : 'transparent',
+                      color: sortBy === 'Unanswered' ? 'white' : '#6366f1',
+                      borderColor: '#6366f1',
+                      '&:hover': {
+                        bgcolor: sortBy === 'Unanswered' ? '#4f46e5' : '#f3f4f6',
+                      }
+                    }}
                     fullWidth={{ xs: true, sm: false }}
                   >
                     Unanswered
                   </Button>
-                  <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 100 } }}>
+                  <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
                     <Select
-                      value="more"
+                      value={sortBy === 'Most Voted' || sortBy === 'Most Viewed' ? sortBy : ''}
                       displayEmpty
-                      endAdornment={<KeyboardArrowDown />}
-                      sx={{ textTransform: 'none' }}
+                      onChange={(e) => setSortBy(e.target.value || 'Newest')}
+                      sx={{
+                        textTransform: 'none',
+                        borderColor: '#6366f1',
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#6366f1',
+                        },
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#4f46e5',
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#6366f1',
+                        },
+                      }}
+                      renderValue={(selected) => selected || 'more'}
                     >
-                      <MenuItem value="more">more</MenuItem>
-                      <MenuItem value="most-voted">Most Voted</MenuItem>
-                      <MenuItem value="most-viewed">Most Viewed</MenuItem>
+                      <MenuItem value="Most Voted">Most Voted</MenuItem>
+                      <MenuItem value="Most Viewed">Most Viewed</MenuItem>
                     </Select>
                   </FormControl>
                 </Box>
@@ -796,9 +893,47 @@ function App() {
 
               {/* Questions List */}
               <Box>
-                {mockQuestions.map((question) => (
-                  <QuestionCard key={question.id} question={question} />
-                ))}
+                {sortedAndFilteredQuestions.length > 0 ? (
+                  sortedAndFilteredQuestions.map((question) => (
+                    <QuestionCard key={question.id} question={question} />
+                  ))
+                ) : (
+                  <Card sx={{ p: 4, textAlign: 'center', bgcolor: '#f8fafc' }}>
+                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                      No questions found
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {searchTerm.trim()
+                        ? `No questions match "${searchTerm}" with the current filter "${sortBy}". Try different keywords or browse all questions.`
+                        : sortBy === 'Unanswered'
+                          ? "No unanswered questions available at the moment."
+                          : "No questions available at the moment."
+                      }
+                    </Typography>
+                    {(searchTerm.trim() || sortBy !== 'Newest') && (
+                      <Box display="flex" justifyContent="center" gap={2} mt={2}>
+                        {searchTerm.trim() && (
+                          <Button
+                            variant="outlined"
+                            onClick={() => setSearchTerm('')}
+                            sx={{ textTransform: 'none' }}
+                          >
+                            Clear search
+                          </Button>
+                        )}
+                        {sortBy !== 'Newest' && (
+                          <Button
+                            variant="outlined"
+                            onClick={() => setSortBy('Newest')}
+                            sx={{ textTransform: 'none' }}
+                          >
+                            Show all questions
+                          </Button>
+                        )}
+                      </Box>
+                    )}
+                  </Card>
+                )}
               </Box>
 
               {/* Pagination */}
