@@ -31,7 +31,6 @@ import {
   Select,
   Pagination,
   Divider,
-  Collapse,
   Breadcrumbs,
   Link,
   Dialog,
@@ -43,14 +42,10 @@ import {
   Search,
   Notifications,
   Add,
-  KeyboardArrowDown,
   ArrowUpward,
   ArrowDownward,
-  Comment,
   Bookmark,
   Person,
-  ExpandMore,
-  ExpandLess,
   Home,
   NavigateNext,
   FormatBold,
@@ -259,16 +254,14 @@ function App() {
   const [sortBy, setSortBy] = useState(() => loadFromStorage('stackit_sortBy', 'Newest'));
   const [notificationAnchor, setNotificationAnchor] = useState(null);
   const [notifications] = useState(() => loadFromStorage('stackit_notifications', 3));
-  const [currentView, setCurrentView] = useState('questions'); // 'questions' or 'question-detail'
-  const [selectedQuestion, setSelectedQuestion] = useState(null);
-  const [newAnswer, setNewAnswer] = useState('');
+  const [currentView, setCurrentView] = useState(() => loadFromStorage('stackit_currentView', 'questions')); // 'questions' or 'question-detail'
+  const [selectedQuestion, setSelectedQuestion] = useState(() => loadFromStorage('stackit_selectedQuestion', null));
   const [askQuestionOpen, setAskQuestionOpen] = useState(false);
   const [questionForm, setQuestionForm] = useState({
     title: '',
     description: '',
     tags: ''
   });
-  const [answerSubmitted, setAnswerSubmitted] = useState(false);
   const [userVotes, setUserVotes] = useState(() => loadFromStorage('stackit_userVotes', {})); // Track user's votes: { questionId: 'up'/'down', answerId: 'up'/'down' }
 
   // Save data to localStorage whenever state changes
@@ -284,9 +277,17 @@ function App() {
     saveToStorage('stackit_userVotes', userVotes);
   }, [userVotes]);
 
+  useEffect(() => {
+    saveToStorage('stackit_currentView', currentView);
+  }, [currentView]);
+
+  useEffect(() => {
+    saveToStorage('stackit_selectedQuestion', selectedQuestion);
+  }, [selectedQuestion]);
+
   // Clear all localStorage data (useful for testing)
   const clearAllData = () => {
-    const keys = ['stackit_questions', 'stackit_sortBy', 'stackit_userVotes', 'stackit_notifications'];
+    const keys = ['stackit_questions', 'stackit_sortBy', 'stackit_userVotes', 'stackit_notifications', 'stackit_currentView', 'stackit_selectedQuestion'];
     keys.forEach(key => {
       try {
         window.localStorage.removeItem(key);
@@ -298,6 +299,8 @@ function App() {
     setQuestions(mockQuestions);
     setSortBy('Newest');
     setUserVotes({});
+    setCurrentView('questions');
+    setSelectedQuestion(null);
     console.log('All StackIt data cleared from localStorage');
   };
 
@@ -308,6 +311,22 @@ function App() {
       delete window.clearStackItData;
     };
   }, []);
+
+  // Validate selectedQuestion exists in questions array on app load
+  useEffect(() => {
+    if (selectedQuestion && currentView === 'question-detail') {
+      const questionExists = questions.some(q => q.id === selectedQuestion.id);
+      if (!questionExists) {
+        // If selected question doesn't exist anymore, go back to questions list
+        setCurrentView('questions');
+        setSelectedQuestion(null);
+      } else {
+        // Update selected question with latest data from questions array
+        const updatedQuestion = questions.find(q => q.id === selectedQuestion.id);
+        setSelectedQuestion(updatedQuestion);
+      }
+    }
+  }, [questions, selectedQuestion, currentView]);
 
   const handleNotificationClick = (event) => {
     setNotificationAnchor(event.currentTarget);
@@ -516,24 +535,11 @@ function App() {
     alert('Your question has been posted successfully!');
   };
 
-  const handleSubmitAnswer = () => {
-    if (!hasPermission('canPost')) {
-      const message = !user
-        ? 'Please sign in to post an answer.'
-        : 'You do not have permission to post answers.';
-      alert(message);
-      return;
-    }
-
-    if (!newAnswer.trim()) {
-      alert('Please write an answer before submitting.');
-      return;
-    }
-
+  const handleAnswerSubmit = (answerText) => {
     // Create a new answer object
     const newAnswerObj = {
       id: Date.now(), // Simple ID generation
-      content: newAnswer,
+      content: answerText,
       author: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.emailAddresses?.[0]?.emailAddress || 'Anonymous User' : 'Anonymous User',
       votes: 0,
       timeAgo: 'just now',
@@ -560,17 +566,6 @@ function App() {
       answersData: [...(selectedQuestion.answersData || []), newAnswerObj]
     };
     setSelectedQuestion(updatedQuestion);
-
-    // Clear the answer input
-    setNewAnswer('');
-
-    // Show success message
-    setAnswerSubmitted(true);
-    setTimeout(() => setAnswerSubmitted(false), 3000); // Hide after 3 seconds
-  };
-
-  const handleCancelAnswer = () => {
-    setNewAnswer('');
   };
 
   // Filter questions based on search term
@@ -614,6 +609,149 @@ function App() {
         return a.id - b.id;
     }
   });
+
+  // Answer Input Component to avoid focus issues
+  const AnswerInput = ({ questionId, onSubmit }) => {
+    const [answerText, setAnswerText] = useState('');
+    const [submitted, setSubmitted] = useState(false);
+
+    const handleSubmit = () => {
+      if (!hasPermission('canPost')) {
+        const message = !user
+          ? 'Please sign in to post an answer.'
+          : 'You do not have permission to post answers.';
+        alert(message);
+        return;
+      }
+
+      if (!answerText.trim()) {
+        alert('Please write an answer before submitting.');
+        return;
+      }
+
+      onSubmit(answerText);
+      setAnswerText('');
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+    };
+
+    const handleCancel = () => {
+      setAnswerText('');
+    };
+
+    return (
+      <Box mt={5}>
+        <Typography variant="h5" sx={{ mb: 3, fontWeight: 500 }}>
+          Your Answer
+        </Typography>
+
+        {/* Rich Text Editor Toolbar */}
+        <Box
+          sx={{
+            border: '1px solid #e0e0e0',
+            borderRadius: '4px 4px 0 0',
+            p: 1.5,
+            bgcolor: '#f5f5f5',
+            display: 'flex',
+            gap: 1,
+            flexWrap: 'wrap'
+          }}
+        >
+          <IconButton size="small"><FormatBold /></IconButton>
+          <IconButton size="small"><FormatItalic /></IconButton>
+          <Divider orientation="vertical" flexItem />
+          <IconButton size="small"><FormatListBulleted /></IconButton>
+          <IconButton size="small"><FormatListNumbered /></IconButton>
+          <Divider orientation="vertical" flexItem />
+          <IconButton size="small"><EmojiEmotions /></IconButton>
+          <IconButton size="small"><LinkIcon /></IconButton>
+          <IconButton size="small"><Image /></IconButton>
+          <Divider orientation="vertical" flexItem />
+          <IconButton size="small"><FormatAlignLeft /></IconButton>
+          <IconButton size="small"><FormatAlignCenter /></IconButton>
+          <IconButton size="small"><FormatAlignRight /></IconButton>
+        </Box>
+
+        {/* Answer Text Area */}
+        <TextField
+          fullWidth
+          multiline
+          rows={8}
+          value={answerText}
+          onChange={(e) => setAnswerText(e.target.value)}
+          placeholder="Write your answer here..."
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '0 0 4px 4px',
+              '& fieldset': {
+                borderTop: 'none',
+              },
+            },
+          }}
+        />
+
+        {/* Success Message */}
+        {submitted && (
+          <Box
+            sx={{
+              bgcolor: '#d1fae5',
+              color: '#065f46',
+              p: 2,
+              borderRadius: 1,
+              mt: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}
+          >
+            <Typography variant="body2" fontWeight="medium">
+              ✓ Your answer has been posted successfully!
+            </Typography>
+          </Box>
+        )}
+
+        {/* Submit Button */}
+        <Box display="flex" gap={2} mt={3}>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={!answerText.trim()}
+            sx={{
+              bgcolor: '#6366f1',
+              '&:hover': { bgcolor: '#4f46e5' },
+              textTransform: 'none',
+              px: 3,
+              py: 1,
+              fontWeight: 500,
+              '&:disabled': {
+                bgcolor: '#9ca3af',
+                color: '#ffffff'
+              }
+            }}
+          >
+            Post Answer
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleCancel}
+            sx={{
+              borderColor: '#d1d5db',
+              color: '#6b7280',
+              textTransform: 'none',
+              px: 3,
+              py: 1,
+              '&:hover': {
+                borderColor: '#9ca3af',
+                bgcolor: '#f9fafb'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+        </Box>
+      </Box>
+    );
+  };
 
   const QuestionDetailPage = ({ question }) => (
     <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 } }}>
@@ -846,100 +984,10 @@ function App() {
           ))}
 
           {/* Submit Answer Section */}
-          <Box mt={5}>
-            <Typography variant="h5" sx={{ mb: 3, fontWeight: 500 }}>
-              Your Answer
-            </Typography>
-
-            {/* Rich Text Editor Toolbar */}
-            <Box
-              sx={{
-                border: '1px solid #e0e0e0',
-                borderRadius: '4px 4px 0 0',
-                p: 1.5,
-                bgcolor: '#f5f5f5',
-                display: 'flex',
-                gap: 1,
-                flexWrap: 'wrap'
-              }}
-            >
-              <IconButton size="small"><FormatBold /></IconButton>
-              <IconButton size="small"><FormatItalic /></IconButton>
-              <Divider orientation="vertical" flexItem />
-              <IconButton size="small"><FormatListBulleted /></IconButton>
-              <IconButton size="small"><FormatListNumbered /></IconButton>
-              <Divider orientation="vertical" flexItem />
-              <IconButton size="small"><EmojiEmotions /></IconButton>
-              <IconButton size="small"><LinkIcon /></IconButton>
-              <IconButton size="small"><Image /></IconButton>
-              <Divider orientation="vertical" flexItem />
-              <IconButton size="small"><FormatAlignLeft /></IconButton>
-              <IconButton size="small"><FormatAlignCenter /></IconButton>
-              <IconButton size="small"><FormatAlignRight /></IconButton>
-            </Box>
-
-            {/* Answer Text Area */}
-            <TextField
-              fullWidth
-              multiline
-              rows={8}
-              value={newAnswer}
-              onChange={(e) => setNewAnswer(e.target.value)}
-              placeholder="Write your answer here..."
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '0 0 4px 4px',
-                  '& fieldset': {
-                    borderTop: 'none',
-                  },
-                },
-              }}
-            />
-
-            {/* Success Message */}
-            {answerSubmitted && (
-              <Box
-                mt={2}
-                p={2}
-                sx={{
-                  bgcolor: '#d1fae5',
-                  border: '1px solid #10b981',
-                  borderRadius: 2,
-                  color: '#065f46'
-                }}
-              >
-                <Typography variant="body2" fontWeight="medium">
-                  ✓ Your answer has been posted successfully!
-                </Typography>
-              </Box>
-            )}
-
-            <Box mt={3} display="flex" justifyContent="flex-end" gap={2}>
-              <Button
-                variant="outlined"
-                sx={{ textTransform: 'none' }}
-                onClick={handleCancelAnswer}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleSubmitAnswer}
-                disabled={!newAnswer.trim()}
-                sx={{
-                  bgcolor: '#6366f1',
-                  '&:hover': { bgcolor: '#4f46e5' },
-                  textTransform: 'none',
-                  '&:disabled': {
-                    bgcolor: '#9ca3af',
-                    color: '#ffffff'
-                  }
-                }}
-              >
-                Post Your Answer
-              </Button>
-            </Box>
-          </Box>
+          <AnswerInput
+            questionId={question.id}
+            onSubmit={handleAnswerSubmit}
+          />
         </Box>
 
         {/* Sidebar for Question Detail */}
@@ -1440,7 +1488,7 @@ function App() {
         </Container>
       ) : (
         /* Question Detail Page */
-        <QuestionDetailPage question={selectedQuestion} />
+        <QuestionDetailPage key={selectedQuestion?.id} question={selectedQuestion} />
       )}
 
       {/* Ask Question Dialog */}
