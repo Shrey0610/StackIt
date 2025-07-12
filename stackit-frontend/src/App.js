@@ -179,7 +179,6 @@ const mockQuestions = [
 
 function App() {
   const { user } = useUser();
-  const [backendUser, setBackendUser] = useState(null);
 
   // User roles and permissions system
   const USER_ROLES = {
@@ -188,45 +187,14 @@ function App() {
     ADMIN: 'admin'
   };
 
-  // Fetch user data from backend when user changes
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (user && user.id) {
-        try {
-          const token = await user.getToken();
-          const response = await fetch('http://localhost:5000/api/users/profile', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-
-          if (response.ok) {
-            const userData = await response.json();
-            setBackendUser(userData);
-            console.log('Fetched user data from backend:', userData);
-          }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
-        }
-      } else {
-        setBackendUser(null);
-      }
-    };
-
-    fetchUserData();
-  }, [user]);
-
   // Helper function to get user role
   const getUserRole = (user) => {
     if (!user) return USER_ROLES.GUEST;
 
-    // Use backend user role if available, otherwise default to user
-    if (backendUser && backendUser.role) {
-      return backendUser.role;
-    }
-
-    // Fallback to Clerk metadata if backend user not loaded yet
+    // Check user's public metadata for role (this would be set via Clerk Dashboard or API)
     const role = user.publicMetadata?.role;
+
+    // Default new users to 'user' role, admins must be set manually
     return role || USER_ROLES.USER;
   };
 
@@ -389,7 +357,7 @@ function App() {
       console.log('User:', user);
 
       // Make API call to check if user is admin (no input needed)
-      const response = await fetch('http://localhost:5000/api/admin/promote', {
+      const response = await fetch('http://localhost:3001/api/admin/promote', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -404,20 +372,8 @@ function App() {
         const data = await response.json();
         console.log('Success response:', data);
         alert(`Success! ${data.message}`);
-
-        // Refresh backend user data to update role
-        const token = await user.getToken();
-        const userResponse = await fetch('http://localhost:5000/api/users/profile', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (userResponse.ok) {
-          const userData = await userResponse.json();
-          setBackendUser(userData);
-          console.log('Updated user data:', userData);
-        }
+        // Refresh the page to update role
+        window.location.reload();
       } else {
         const error = await response.json();
         console.log('Error response:', error);

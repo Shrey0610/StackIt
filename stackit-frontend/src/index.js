@@ -5,7 +5,7 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
-const PUBLISHABLE_KEY = 'pk_test_ZmxleGlibGUtd2VyZXdvbGYtNDAuY2xlcmsuYWNjb3VudHMuZGV2JA';
+const PUBLISHABLE_KEY = 'TEST_PUBLISHABLE_KEY'; // Replace with your actual Clerk publishable key
 
 if (!PUBLISHABLE_KEY) {
   throw new Error("Missing Clerk Publishable Key");
